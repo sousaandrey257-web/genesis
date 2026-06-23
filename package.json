@@ -1,0 +1,26 @@
+{
+  "name": "genesis",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GENESIS — autonomous digital product generator",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "start": "turbo run start",
+    "engine": "npm run dev --workspace=@genesis/engine"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.6",
+    "typescript": "^5.5.3",
+    "prettier": "^3.3.2"
+  },
+  "packageManager": "npm@10.0.0",
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}
