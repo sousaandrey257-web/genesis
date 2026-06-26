@@ -3,18 +3,20 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Loader2 } from 'lucide-react';
-
-const STEPS = [
-  { label: 'Langue détectée', result: 'Français 🇫🇷' },
-  { label: 'Idée analysée', result: 'Salon · Coiffure · Luxe · Lyon' },
-  { label: '20 concurrents analysés', result: '5 faiblesses exploitées' },
-  { label: 'Identité visuelle unique', result: 'Palette #7C3AED générée' },
-  { label: 'Code production-ready', result: '6 fichiers · 0 erreur' },
-  { label: 'Déployé', result: 'salon-eclat-lyon.genesis.site' },
-];
+import { useT } from '@/lib/i18n';
 
 export default function LiveDemo() {
+  const t = useT();
   const [active, setActive] = useState(0);
+
+  const STEPS = [
+    { label: t({ fr: 'Langue détectée', en: 'Language detected' }), result: t({ fr: 'Français 🇫🇷', en: 'French 🇫🇷' }) },
+    { label: t({ fr: 'Idée analysée', en: 'Idea analyzed' }), result: t({ fr: 'Salon · Coiffure · Luxe · Lyon', en: 'Salon · Hair · Luxury · Lyon' }) },
+    { label: t({ fr: '20 concurrents analysés', en: '20 competitors analyzed' }), result: t({ fr: '5 faiblesses exploitées', en: '5 weaknesses exploited' }) },
+    { label: t({ fr: 'Identité visuelle unique', en: 'Unique visual identity' }), result: t({ fr: 'Palette #7C3AED générée', en: 'Palette #7C3AED generated' }) },
+    { label: t({ fr: 'Code production-ready', en: 'Production-ready code' }), result: t({ fr: '6 fichiers · 0 erreur', en: '6 files · 0 errors' }) },
+    { label: t({ fr: 'Déployé', en: 'Deployed' }), result: t({ fr: 'salon-eclat-lyon.genesis.site', en: 'salon-eclat-lyon.genesis.site' }) },
+  ];
 
   useEffect(() => {
     const t = setInterval(() => setActive((v) => (v + 1) % (STEPS.length + 2)), 1200);
@@ -24,10 +26,15 @@ export default function LiveDemo() {
   return (
     <section id="demo" className="relative mx-auto max-w-6xl px-6 py-28">
       <div className="mb-14 text-center">
-        <h2 className="text-3xl font-bold sm:text-4xl">
-          Regarde GENESIS <span className="text-gradient">créer un site en direct</span>
+        <h2 className="font-display text-3xl font-medium sm:text-5xl">
+          {t({ fr: 'Regarde GENESIS ', en: 'Watch GENESIS ' })}
+          <span className="text-gradient">
+            {t({ fr: 'créer un site en direct', en: 'build a site live' })}
+          </span>
         </h2>
-        <p className="mt-3 text-white/50">De l’idée au site déployé. En temps réel.</p>
+        <p className="mt-3 text-white/50">
+          {t({ fr: 'De l’idée au site déployé. En temps réel.', en: 'From idea to deployed site. In real time.' })}
+        </p>
       </div>
 
       <div className="grid items-center gap-10 lg:grid-cols-2">
@@ -35,7 +42,7 @@ export default function LiveDemo() {
         <div className="glass-strong rounded-2xl p-6">
           <div className="mb-5 flex items-center gap-2 rounded-lg bg-black/40 px-4 py-3 font-mono text-sm text-white/70">
             <span className="text-violet-300">›</span>
-            « Salon de coiffure haut de gamme à Lyon »
+            {t({ fr: '« Salon de coiffure haut de gamme à Lyon »', en: '“Upscale hair salon in Lyon”' })}
           </div>
           <ul className="space-y-3">
             {STEPS.map((step, i) => {
@@ -87,10 +94,10 @@ export default function LiveDemo() {
                       className="flex h-full flex-col p-5"
                     >
                       <div className="text-[10px] uppercase tracking-widest text-violet-300">
-                        Éclat · Lyon
+                        {t({ fr: 'Éclat · Lyon', en: 'Éclat · Lyon' })}
                       </div>
                       <div className="mt-2 font-serif text-2xl text-white">
-                        L’art de la coiffure
+                        {t({ fr: 'L’art de la coiffure', en: 'The art of hairstyling' })}
                       </div>
                       <div className="mt-1 h-2 w-2/3 rounded bg-white/20" />
                       <div className="mt-1 h-2 w-1/2 rounded bg-white/10" />
@@ -105,7 +112,7 @@ export default function LiveDemo() {
                       className="flex h-full items-center justify-center text-sm text-white/40"
                     >
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Construction…
+                      {t({ fr: 'Construction…', en: 'Building…' })}
                     </motion.div>
                   )}
                 </AnimatePresence>

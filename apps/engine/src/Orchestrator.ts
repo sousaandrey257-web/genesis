@@ -8,7 +8,7 @@ import type {
 } from '@genesis/shared';
 import { runTranslator } from './agents/TranslatorAgent';
 import { runAnalyzer } from './agents/AnalyzerAgent';
-import { runCompetitor } from './agents/CompetitorAgent';
+import { runCompetitor, competitorTargetForPlan } from './agents/CompetitorAgent';
 import { runContent } from './agents/ContentAgent';
 import { runSEO } from './agents/SEOAgent';
 import { runDesign, generateSeed } from './agents/DesignAgent';
@@ -87,15 +87,16 @@ export async function* runPipeline(
     'RevenueAgent',
   );
 
-  // ── Step 3: Competitors (non-fatal: degrade to a neutral positioning) ─
-  yield ev('competitors', 'start', 'Analyse de 20 concurrents…', 34);
+  // ── Step 3: Competitors (depth scales with the plan; non-fatal) ────
+  const competitorTarget = competitorTargetForPlan(req.plan);
+  yield ev('competitors', 'start', `Analyse de ${competitorTarget} concurrents…`, 34);
   let competitor: CompetitorReport;
   try {
-    competitor = await runCompetitor(brief);
+    competitor = await runCompetitor(brief, competitorTarget);
     yield ev(
       'competitors',
       'done',
-      `Positionnement gagnant identifié (${competitor.topWeaknesses.length} faiblesses exploitées)`,
+      `${competitorTarget} concurrents analysés — positionnement gagnant identifié (${competitor.topWeaknesses.length} faiblesses exploitées)`,
       40,
       competitor,
     );

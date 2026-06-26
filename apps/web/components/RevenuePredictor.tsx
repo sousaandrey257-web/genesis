@@ -12,6 +12,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { ArrowRight, Loader2, TrendingUp } from 'lucide-react';
+import { useLang } from '@/lib/i18n';
 
 // ─── Props & types ──────────────────────────────────────────────────
 
@@ -183,6 +184,7 @@ function Skeleton() {
 // ─── Widget ─────────────────────────────────────────────────────────
 
 export default function RevenuePredictor({ idea, onGenerate, accuracy = 0.8 }: RevenuePredictorProps) {
+  const lang = useLang();
   const [base, setBase] = useState<RevenuePrediction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,7 +208,7 @@ export default function RevenuePredictor({ idea, onGenerate, accuracy = 0.8 }: R
     fetch('/api/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idea: trimmed }),
+      body: JSON.stringify({ idea: trimmed, lang }),
       signal: controller.signal,
     })
       .then(async (res) => {
@@ -234,7 +236,7 @@ export default function RevenuePredictor({ idea, onGenerate, accuracy = 0.8 }: R
       cancelled = true;
       controller.abort();
     };
-  }, [idea]);
+  }, [idea, lang]);
 
   const projection = useMemo<DerivedProjection | null>(
     () => (base && scenario ? recompute(base, scenario) : null),

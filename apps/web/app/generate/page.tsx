@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StreamEvent } from '@genesis/shared';
 import { ArrowRight, Loader2 } from 'lucide-react';
+import { useT } from '@/lib/i18n';
+import RevenuePredictor from '@/components/RevenuePredictor';
 
 interface FinalSite {
   id: string;
@@ -21,18 +23,19 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
+  const t = useT();
   const progress = events.at(-1)?.progress ?? 0;
+  const showPredictor = idea.trim().length >= 3 && !running && events.length === 0 && !site;
 
   // A brief synthesized by the ConversationUI (/start) is handed over via
-  // sessionStorage; prefill it and auto-launch the generation.
+  // sessionStorage; prefill it so the revenue projection shows before the user
+  // launches the generation.
   useEffect(() => {
     const handover = sessionStorage.getItem('genesis_idea');
     if (handover) {
       sessionStorage.removeItem('genesis_idea');
       setIdea(handover);
-      void generate(handover);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function generate(ideaOverride?: string) {
@@ -96,7 +99,10 @@ export default function GeneratePage() {
       <div className="mx-auto max-w-3xl">
         <a href="/" className="text-sm text-white/40 hover:text-white">← GENESIS</a>
         <h1 className="mt-6 text-3xl font-bold sm:text-4xl">
-          Décris ton idée. <span className="text-gradient">GENESIS s’occupe du reste.</span>
+          {t({ fr: 'Décris ton idée. ', en: 'Describe your idea. ' })}
+          <span className="text-gradient">
+            {t({ fr: 'GENESIS s’occupe du reste.', en: 'GENESIS handles the rest.' })}
+          </span>
         </h1>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -104,7 +110,10 @@ export default function GeneratePage() {
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && generate()}
-            placeholder="Ex : Salon de coiffure haut de gamme à Lyon"
+            placeholder={t({
+              fr: 'Ex : Salon de coiffure haut de gamme à Lyon',
+              en: 'e.g. High-end hair salon in Lyon',
+            })}
             disabled={running}
             className="flex-1 rounded-full glass px-6 py-4 text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-violet-glow/50"
           />
@@ -114,9 +123,15 @@ export default function GeneratePage() {
             className="inline-flex items-center justify-center gap-2 rounded-full bg-genesis-gradient px-7 py-4 font-semibold text-white transition hover:scale-[1.03] disabled:opacity-50"
           >
             {running ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
-            {running ? 'Génération…' : 'Générer'}
+            {running ? t({ fr: 'Génération…', en: 'Generating…' }) : t({ fr: 'Générer', en: 'Generate' })}
           </button>
         </div>
+
+        {showPredictor && (
+          <div className="mt-8">
+            <RevenuePredictor idea={idea} onGenerate={() => generate()} />
+          </div>
+        )}
 
         {events.length > 0 && (
           <div className="mt-8">

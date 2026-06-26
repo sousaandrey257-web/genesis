@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConversationMessage, ConversationResult } from '@genesis/engine';
 import { ArrowRight, Loader2, Mic, MicOff, Send, Sparkles } from 'lucide-react';
+import { useLang } from '@/lib/i18n';
 
 /* ─── Minimal typed shim for the Web Speech API (not in lib.dom by default) ─── */
 
@@ -65,6 +66,7 @@ let bubbleSeq = 0;
 const nextId = (): number => ++bubbleSeq;
 
 export default function ConversationUI({ onComplete }: ConversationUIProps): JSX.Element {
+  const lang = useLang();
   const [bubbles, setBubbles] = useState<ChatBubble[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -116,7 +118,7 @@ export default function ConversationUI({ onComplete }: ConversationUIProps): JSX
       const res = await fetch('/api/conversation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: transcriptRef.current }),
+        body: JSON.stringify({ messages: transcriptRef.current, lang }),
       });
       if (!res.ok) throw new Error('La conversation a échoué. Réessayez.');
       const result = (await res.json()) as ConversationResult;
@@ -141,7 +143,7 @@ export default function ConversationUI({ onComplete }: ConversationUIProps): JSX
       setThinking(false);
       scrollToBottom();
     }
-  }, [scrollToBottom, typeAssistant]);
+  }, [scrollToBottom, typeAssistant, lang]);
 
   // Kick off the conversation with GENESIS's first question on mount.
   useEffect(() => {

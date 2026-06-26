@@ -1,7 +1,14 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { listSites, getUserPlan, getUsageThisMonth } from '@/lib/entitlements';
+import {
+  listSites,
+  getUserPlan,
+  getUsageThisMonth,
+  type SiteRow,
+} from '@/lib/entitlements';
+import { getPlan, type Plan } from '@/lib/plans';
+import { isDemoMode } from '@/lib/demo';
 import DashboardActions from '@/components/DashboardActions';
 
 export const dynamic = 'force-dynamic';
@@ -10,16 +17,38 @@ const LANG_FLAG: Record<string, string> = {
   fr: '🇫🇷', en: '🇬🇧', ar: '🇸🇦', es: '🇪🇸', wo: '🇸🇳', sw: '🇰🇪', zh: '🇨🇳', hi: '🇮🇳',
 };
 
+// Sample sites shown in demo mode (no login / no Supabase needed).
+const DEMO_SITES: SiteRow[] = [
+  { id: 'demo-1', business_name: 'Salon Éclat', type: 'salon', sector: 'Coiffure', language: 'fr', status: 'live', deploy_url: 'https://salon-eclat-lyon.genesis.site', created_at: '2024-01-12T10:00:00Z' },
+  { id: 'demo-2', business_name: 'Bistro Lumière', type: 'restaurant', sector: 'Restauration', language: 'fr', status: 'live', deploy_url: 'https://bistro-lumiere.genesis.site', created_at: '2024-01-18T10:00:00Z' },
+  { id: 'demo-3', business_name: 'NovaSaaS', type: 'saas', sector: 'SaaS', language: 'en', status: 'live', deploy_url: 'https://novasaas.genesis.site', created_at: '2024-02-02T10:00:00Z' },
+  { id: 'demo-4', business_name: 'Atelier Céramique', type: 'portfolio', sector: 'Artisanat', language: 'fr', status: 'building', deploy_url: null, created_at: '2024-02-09T10:00:00Z' },
+];
+
 export default async function Dashboard() {
   const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  const demo = !session?.user?.id && isDemoMode();
+  if (!session?.user?.id && !demo) redirect('/login');
 
-  const userId = session.user.id;
-  const [sites, plan, used] = await Promise.all([
-    listSites(userId),
-    getUserPlan(userId),
-    getUsageThisMonth(userId),
-  ]);
+  let sites: SiteRow[];
+  let plan: Plan;
+  let used: number;
+  let displayName: string;
+
+  if (demo) {
+    sites = DEMO_SITES;
+    plan = getPlan('pro');
+    used = DEMO_SITES.length;
+    displayName = 'Marie';
+  } else {
+    const userId = session!.user!.id;
+    [sites, plan, used] = await Promise.all([
+      listSites(userId),
+      getUserPlan(userId),
+      getUsageThisMonth(userId),
+    ]);
+    displayName = session!.user!.name ?? '';
+  }
   const limit = plan.sitesPerMonth === Infinity ? '∞' : plan.sitesPerMonth;
 
   return (
@@ -27,7 +56,7 @@ export default async function Dashboard() {
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Bonjour {session.user.name ?? ''} 👋</h1>
+            <h1 className="text-2xl font-bold">Bonjour {displayName} 👋</h1>
             <p className="mt-1 text-sm text-white/50">
               Plan <span className="text-violet-200">{plan.name}</span> · {used}/{limit} sites ce mois-ci
             </p>

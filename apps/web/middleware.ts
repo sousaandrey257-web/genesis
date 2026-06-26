@@ -6,6 +6,11 @@ import { NextResponse, type NextRequest } from 'next/server';
  * and enforce real authorization server-side in the page via `auth()`.
  */
 export function middleware(req: NextRequest) {
+  // Demo mode: let the dashboard render sample data without a login.
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+    return NextResponse.next();
+  }
+
   const hasSession =
     req.cookies.has('authjs.session-token') ||
     req.cookies.has('__Secure-authjs.session-token');

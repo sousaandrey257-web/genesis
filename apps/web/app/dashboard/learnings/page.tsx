@@ -7,6 +7,7 @@ import {
   type LearningReport,
   type SectorInsights,
 } from '@genesis/engine';
+import { isDemoMode } from '@/lib/demo';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ const SECTORS = ['coiffure', 'restaurant', 'e-commerce'] as const;
 
 export default async function LearningsPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  if (!session?.user?.id && !isDemoMode()) redirect('/login');
 
   const period = new Date().toISOString().slice(0, 7); // stable YYYY-MM
 

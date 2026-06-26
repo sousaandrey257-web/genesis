@@ -1,6 +1,7 @@
 import { runTranslator, runAnalyzer, predictRevenue } from '@genesis/engine';
 import type { RevenuePrediction } from '@genesis/engine';
 import type { BriefAnalysis } from '@genesis/shared';
+import { isDemoMode, demoPrediction, type Lang } from '@/lib/demo';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -8,6 +9,7 @@ export const maxDuration = 60;
 interface PredictBody {
   idea?: string;
   analysis?: BriefAnalysis;
+  lang?: Lang;
 }
 
 /**
@@ -21,6 +23,12 @@ interface PredictBody {
 export async function POST(req: Request): Promise<Response> {
   try {
     const body = (await req.json()) as PredictBody;
+    const lang: Lang = body.lang === 'en' ? 'en' : 'fr';
+
+    // Demo mode: instant example projection, no Anthropic key needed.
+    if (isDemoMode()) {
+      return Response.json(demoPrediction(body.idea ?? '', lang));
+    }
 
     let analysis: BriefAnalysis | undefined = body.analysis;
 
