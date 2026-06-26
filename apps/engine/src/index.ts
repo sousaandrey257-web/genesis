@@ -25,6 +25,31 @@ export type {
   GrowthAnalysis,
   ABTest,
 } from './agents/GrowthAgent';
+export {
+  recordLearning,
+  getSectorInsights,
+  monthlyLearningReport,
+} from './agents/LearningAgent';
+export type {
+  Learning,
+  SectorInsights,
+  LearningReport,
+} from './agents/LearningAgent';
+export { runBrand } from './agents/BrandAgent';
+export type { BrandResult } from './agents/BrandAgent';
+export { predictRevenue, getPredictionAccuracy } from './agents/RevenueAgent';
+export type { RevenuePrediction } from './agents/RevenueAgent';
+export {
+  MARKETPLACE_COMMISSION,
+  TEMPLATE_COMMISSION,
+  isConnectConfigured,
+  createConnectedAccount,
+  createAccountLink,
+  createSiteCheckout,
+  createTemplateCheckout,
+  commissionFor,
+} from './tools/StripeConnect';
+export type { ConnectAccount, MarketplaceCheckout } from './tools/StripeConnect';
 export { assessForUpdate } from './agents/UpdateAgent';
 export { runUpdateCycle } from './update';
 export type { UpdateCycleResult } from './update';

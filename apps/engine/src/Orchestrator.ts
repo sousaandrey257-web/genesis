@@ -17,6 +17,9 @@ import { runMobile } from './agents/MobileAgent';
 import { runVideo } from './agents/VideoAgent';
 import { runMarketing } from './agents/MarketingAgent';
 import { runGrowth } from './agents/GrowthAgent';
+import { runBrand } from './agents/BrandAgent';
+import { getSectorInsights, recordLearning } from './agents/LearningAgent';
+import { predictRevenue } from './agents/RevenueAgent';
 import { getTemplate, applyTemplateToBrief, templateToPlan } from './templates';
 import { runReviewer } from './agents/ReviewerAgent';
 import { runDeployer } from './agents/DeployerAgent';
@@ -50,8 +53,38 @@ export async function* runPipeline(
     'analyze',
     'done',
     `${template.label} • ${brief.sector} • ${brief.businessName}`,
-    28,
+    24,
     { brief, template: template.label },
+  );
+
+  // ── Step 2.5: Learning — consult winning patterns for this sector ──
+  yield ev('learning', 'start', 'Consultation des apprentissages du secteur…', 26, undefined, 2.5, 'LearningAgent');
+  const insights = await getSectorInsights(brief.sector).catch(() => undefined);
+  yield ev(
+    'learning',
+    'done',
+    insights && insights.sampleSize > 0
+      ? `${insights.sampleSize} sites analysés — ${insights.patterns.length} patterns gagnants`
+      : 'Patterns secteur par défaut (base en cours de constitution)',
+    28,
+    insights,
+    2.5,
+    'LearningAgent',
+  );
+
+  // ── Step 2.6: Revenue — project the revenue before generating ─────
+  yield ev('revenue', 'start', 'Prédiction du chiffre d’affaires…', 30, undefined, 0.5, 'RevenueAgent');
+  const revenue = await predictRevenue({ analysis: brief, insights }).catch(() => undefined);
+  yield ev(
+    'revenue',
+    revenue ? 'done' : 'error',
+    revenue
+      ? `CA année 1 estimé : ${Math.round(revenue.revenueYear1).toLocaleString('fr-FR')} € (confiance ${Math.round(revenue.confidence * 100)}%)`
+      : 'Prédiction indisponible',
+    32,
+    revenue,
+    0.5,
+    'RevenueAgent',
   );
 
   // ── Step 3: Competitors (non-fatal: degrade to a neutral positioning) ─
@@ -117,6 +150,7 @@ export async function* runPipeline(
     },
     content,
     seo,
+    learnings: insights?.briefAugmentation,
   });
 
   let cstep = await coder.next();
@@ -154,16 +188,23 @@ export async function* runPipeline(
     rtl: translation.isRtl,
   };
 
-  // ── Steps 6–8: Mobile app, promo videos, marketing kit (parallel; non-fatal) ─
+  // ── Steps 5.5–8: Brand, mobile app, promo videos, marketing kit (parallel; non-fatal) ─
+  yield ev('brand', 'start', 'Création de l’identité visuelle (logo, charte)…', 83, undefined, 5.5, 'BrandAgent');
   yield ev('mobile', 'start', 'Génération de l’app mobile (Expo)…', 83, undefined, 6, 'MobileAgent');
   yield ev('video', 'start', 'Génération des vidéos de présentation…', 84, undefined, 7, 'VideoAgent');
   yield ev('marketing', 'start', 'Génération du kit marketing (social, ads, emails)…', 85, undefined, 8, 'MarketingAgent');
 
-  const [mobileR, videoR, marketingR] = await Promise.allSettled([
+  const [brandR, mobileR, videoR, marketingR] = await Promise.allSettled([
+    runBrand({ siteId: projectId, analysis: brief, design, language: { code: lang.code, name: lang.name } }),
     runMobile({ siteId: projectId, analysis: brief, design, competitors: competitor, language: lang }),
     runVideo({ siteId: projectId, analysis: brief, design, competitors: competitor, language: lang }),
     runMarketing({ siteId: projectId, analysis: brief, design, competitors: competitor, language: lang }),
   ]);
+
+  const brand = brandR.status === 'fulfilled' ? brandR.value : undefined;
+  yield brand
+    ? ev('brand', 'done', brand.note, 86, brand, 5.5, 'BrandAgent')
+    : ev('brand', 'error', `Identité visuelle indisponible (${msg((brandR as PromiseRejectedResult).reason)})`, 86, undefined, 5.5, 'BrandAgent');
 
   const mobile = mobileR.status === 'fulfilled' ? mobileR.value : undefined;
   yield mobile
@@ -206,7 +247,18 @@ export async function* runPipeline(
   // ── Step 12: Deploy ────────────────────────────────────────────────
   yield ev('deploy', 'start', 'Déploiement…', 95, undefined, 12, 'DeployerAgent');
   const deploy = await runDeployer(projectId, files, req.customDomain);
-  yield ev('deploy', 'done', deploy.message, 100, deploy, 12, 'DeployerAgent');
+  yield ev('deploy', 'done', deploy.message, 98, deploy, 12, 'DeployerAgent');
+
+  // ── Step 13: Learning — persist what we learned for the next generations ─
+  yield ev('learning', 'start', 'Mémorisation des apprentissages…', 99, undefined, 13, 'LearningAgent');
+  const learning = await recordLearning({
+    siteId: projectId,
+    sector: brief.sector,
+    designTokens: design.palette as unknown as Record<string, unknown>,
+    qualityScore: review.score,
+    whatWorked: insights?.patterns,
+  }).catch((err) => ({ saved: false, note: msg(err) }));
+  yield ev('learning', 'done', learning.saved ? 'Apprentissage sauvegardé' : learning.note, 100, learning, 13, 'LearningAgent');
 
   return {
     id: projectId,
@@ -231,6 +283,18 @@ export async function* runPipeline(
     growth: growth
       ? { abTestId: growth.abTest.id, recommendations: growth.recommendations }
       : undefined,
+    brand: brand
+      ? { path: brand.path, logos: brand.logos, rendered: brand.rendered, note: brand.note }
+      : undefined,
+    revenue: revenue
+      ? {
+          revenueMonth1: revenue.revenueMonth1,
+          revenueYear1: revenue.revenueYear1,
+          confidence: revenue.confidence,
+          breakEvenMonths: revenue.breakEvenMonths,
+        }
+      : undefined,
+    learning,
   };
 }
 

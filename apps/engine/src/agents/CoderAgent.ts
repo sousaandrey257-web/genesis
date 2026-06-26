@@ -26,6 +26,8 @@ export interface CoderInput {
   content?: SiteContent;
   /** Localized SEO/meta + JSON-LD from SEOAgent. Falls back to basic metadata. */
   seo?: SEOPack;
+  /** Distilled, conversion-winning patterns for this sector from the LearningAgent. */
+  learnings?: string;
 }
 
 /** Streamed per-file progress event. */
@@ -263,6 +265,9 @@ function aiSystem(
     `Business: ${analysis.businessName} — ${analysis.valueProposition}.`,
     `Sector: ${analysis.sector}. Audience: ${analysis.audience}.`,
     `Beat competitors via: ${competitors.positioning}.`,
+    ...(input.learnings
+      ? ['', 'PROVEN PATTERNS for this sector (apply them — they convert best):', input.learnings]
+      : []),
     '',
     'Available imports: @/components/Navbar, @/components/Footer,',
     '@/components/ChatWidget, @/lib/content (export getContent), @/lib/design-tokens',

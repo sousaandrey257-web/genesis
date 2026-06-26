@@ -122,17 +122,36 @@ export interface GeneratedSite {
   };
   /** Analytics + A/B setup injected into the site. */
   growth?: { abTestId: string; recommendations: string[] };
+  /** Complete visual identity (logos, brand guide, social pack). */
+  brand?: {
+    path: string;
+    logos: { horizontal: string; square: string; icon: string; white: string };
+    rendered: boolean;
+    note: string;
+  };
+  /** Pre-generation revenue projection (subset; full object streamed in events). */
+  revenue?: {
+    revenueMonth1: number;
+    revenueYear1: number;
+    confidence: number;
+    breakEvenMonths: number;
+  };
+  /** Whether this run's learning was persisted for future generations. */
+  learning?: { saved: boolean; note: string };
 }
 
 /** Streamed pipeline events (SSE) from /api/generate. */
 export type PipelineStage =
   | 'translate'
   | 'analyze'
+  | 'learning'
+  | 'revenue'
   | 'competitors'
   | 'content'
   | 'design'
   | 'architect'
   | 'code'
+  | 'brand'
   | 'mobile'
   | 'video'
   | 'marketing'
