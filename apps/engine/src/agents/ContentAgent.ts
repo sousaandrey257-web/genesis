@@ -18,6 +18,7 @@ export async function runContent(
   translation: TranslationResult,
 ): Promise<SiteContent> {
   return askJSON<SiteContent>({
+    label: 'ContentAgent',
     maxTokens: 2500,
     system:
       'You are a senior copywriter. Write persuasive, specific, non-generic copy ' +

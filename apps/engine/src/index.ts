@@ -11,6 +11,10 @@ export { runReviewer } from './agents/ReviewerAgent';
 export { runSEO } from './agents/SEOAgent';
 export { runContent } from './agents/ContentAgent';
 export { assessForUpdate } from './agents/UpdateAgent';
+export { runUpdateCycle } from './update';
+export type { UpdateCycleResult } from './update';
+export { validateProject } from './validate';
+export type { ValidationReport } from './validate';
 export { runDeployer } from './agents/DeployerAgent';
 export type { ArchitecturePlan } from './agents/ArchitectAgent';
 export {

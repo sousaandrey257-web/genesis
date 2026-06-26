@@ -8,6 +8,8 @@ import type {
 } from '@genesis/shared';
 import { streamCode } from '../llm';
 import { getTemplate } from '../templates';
+import type { SiteContent } from './ContentAgent';
+import type { SEOPack } from './SEOAgent';
 
 export type Plan = 'starter' | 'pro' | 'business' | 'enterprise' | 'agency';
 
@@ -20,6 +22,10 @@ export interface CoderInput {
   design: DesignSystem;
   plan: Plan;
   language?: { code: string; name: string; rtl: boolean };
+  /** Real persuasive copy from ContentAgent. Falls back to template defaults. */
+  content?: SiteContent;
+  /** Localized SEO/meta + JSON-LD from SEOAgent. Falls back to basic metadata. */
+  seo?: SEOPack;
 }
 
 /** Streamed per-file progress event. */
@@ -142,8 +148,9 @@ function buildPlan(
   files.push({ path: 'tailwind.config.ts', kind: 'static', make: () => tailwindConfig(design) });
   files.push({ path: 'app/globals.css', kind: 'static', make: () => globalsCss(design) });
   files.push({ path: 'lib/design-tokens.ts', kind: 'static', make: () => designTokens(design) });
-  files.push({ path: 'data/content.json', kind: 'static', make: () => contentSeed(analysis, lang, template) });
+  files.push({ path: 'data/content.json', kind: 'static', make: () => contentSeed(input, lang, template) });
   files.push({ path: 'lib/content.ts', kind: 'static', make: contentStore });
+  files.push({ path: 'lib/seo.ts', kind: 'static', make: () => seoModule(input, lang, template) });
   files.push({ path: 'app/api/chat/route.ts', kind: 'static', make: () => chatRoute(analysis) });
   files.push({ path: 'app/api/content/route.ts', kind: 'static', make: () => contentRoute(hasAuth) });
   files.push({ path: 'app/sitemap.ts', kind: 'static', make: sitemap });
@@ -173,11 +180,13 @@ function buildPlan(
       user:
         `Generate app/layout.tsx (Server Component). Set <html lang="${lang.code}"` +
         (lang.rtl ? ' dir="rtl"' : '') +
-        `> and import "./globals.css". Export Next.js \`metadata\` with title, ` +
-        `description and Open Graph from the business. Inject a <script ` +
-        `type="application/ld+json"> with schema.org @type "${template.schemaType}". ` +
+        `> and import "./globals.css". Re-export the SEO metadata: ` +
+        `\`export { metadata } from "@/lib/seo";\`. Import \`jsonLd\` from "@/lib/seo" ` +
+        `and inject it in <head> as <script type="application/ld+json" ` +
+        `dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />. ` +
         `Render <Navbar/>, {children}, <Footer/> and <ChatWidget/> (import from ` +
-        `@/components/...). Body background var(--bg), text var(--text).`,
+        `@/components/...). Body background var(--bg), text var(--text). ` +
+        `Do NOT redefine metadata yourself — only re-export it from @/lib/seo.`,
     },
   });
   files.push({
@@ -257,9 +266,12 @@ function aiSystem(
     '',
     'Available imports: @/components/Navbar, @/components/Footer,',
     '@/components/ChatWidget, @/lib/content (export getContent), @/lib/design-tokens',
-    '(export tokens). Content lives in data/content.json with shape',
-    '{ businessName, tagline, sections: { [id]: { heading, body } }, services:',
-    'string[], contact: { phone, email, address } }.',
+    '(export tokens), @/lib/seo (export metadata, jsonLd). Content lives in',
+    'data/content.json with shape { businessName, tagline, hero: { title, subtitle,',
+    'cta }, sections: { [id]: { heading, body } }, services: string[], faq: [{ q, a }],',
+    'testimonials: [{ name, text }], contact: { phone, email, address } }. Use this',
+    'real copy verbatim — never invent placeholder text. Render the FAQ and',
+    'testimonials when the section list includes them.',
     '',
     'Mobile-first, responsive, accessible (WCAG AA, semantic HTML, alt text, labels).',
   ].join('\n');
@@ -424,23 +436,84 @@ function designTokens(d: DesignSystem): string {
 }
 
 function contentSeed(
-  analysis: BriefAnalysis,
+  input: CoderInput,
   lang: { code: string },
   template: ReturnType<typeof getTemplate>,
 ): string {
+  const { analysis } = input;
+  const copy = input.content;
+
+  // Map ContentAgent's ordered sections onto the template's section ids so the
+  // page can look each one up by id. Fall back to the blueprint's own titles.
   const sections: Record<string, { heading: string; body: string }> = {};
-  for (const s of template.sections) {
-    sections[s.id] = { heading: s.title, body: s.purpose };
-  }
+  template.sections.forEach((s, idx) => {
+    const generated = copy?.sections?.[idx];
+    sections[s.id] = {
+      heading: generated?.heading ?? s.title,
+      body: generated?.body ?? s.purpose,
+    };
+  });
+
   const content = {
     locale: lang.code,
     businessName: analysis.businessName,
-    tagline: analysis.valueProposition,
+    tagline: copy?.hero?.subtitle ?? analysis.valueProposition,
+    hero: copy?.hero ?? {
+      title: analysis.businessName,
+      subtitle: analysis.valueProposition,
+      cta: template.conversionGoal,
+    },
     sections,
     services: analysis.features,
+    faq: copy?.faq ?? [],
+    testimonials: copy?.testimonials ?? [],
     contact: { phone: '', email: '', address: analysis.location.city ?? '' },
   };
   return JSON.stringify(content, null, 2) + '\n';
+}
+
+function seoModule(
+  input: CoderInput,
+  lang: { code: string },
+  template: ReturnType<typeof getTemplate>,
+): string {
+  const { analysis, seo } = input;
+  const title = seo?.title ?? `${analysis.businessName} — ${analysis.sector}`;
+  const description = seo?.metaDescription ?? analysis.valueProposition;
+  const keywords = seo?.keywords ?? analysis.features;
+  const ogTitle = seo?.ogTitle ?? title;
+  const ogDescription = seo?.ogDescription ?? description;
+  const jsonLd =
+    seo?.jsonLd ??
+    {
+      '@context': 'https://schema.org',
+      '@type': template.schemaType,
+      name: analysis.businessName,
+      description,
+      areaServed: analysis.location.city ?? analysis.location.country ?? undefined,
+    };
+
+  const meta = {
+    title,
+    description,
+    keywords,
+    openGraph: {
+      title: ogTitle,
+      description: ogDescription,
+      type: 'website',
+      locale: lang.code,
+    },
+  };
+
+  return [
+    "import type { Metadata } from 'next';",
+    '',
+    '// Localized SEO pack generated by GENESIS (SEOAgent). Imported by app/layout.tsx.',
+    'export const metadata: Metadata = ' + JSON.stringify(meta, null, 2) + ';',
+    '',
+    'export const jsonLd = ' + JSON.stringify(jsonLd, null, 2) + ';',
+    '',
+  ].join('\n');
 }
 
 function contentStore(): string {
@@ -454,8 +527,11 @@ function contentStore(): string {
     '  locale: string;',
     '  businessName: string;',
     '  tagline: string;',
+    '  hero: { title: string; subtitle: string; cta: string };',
     '  sections: Record<string, { heading: string; body: string }>;',
     '  services: string[];',
+    '  faq: { q: string; a: string }[];',
+    '  testimonials: { name: string; text: string }[];',
     '  contact: { phone: string; email: string; address: string };',
     '};',
     '',

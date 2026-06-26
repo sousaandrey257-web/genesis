@@ -16,6 +16,7 @@ export async function runSEO(
   translation: TranslationResult,
 ): Promise<SEOPack> {
   return askJSON<SEOPack>({
+    label: 'SEOAgent',
     maxTokens: 1200,
     system:
       'You are an international SEO specialist. Produce localized, click-worthy ' +

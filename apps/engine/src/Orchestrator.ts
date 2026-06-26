@@ -3,15 +3,20 @@ import type {
   GeneratedFile,
   GeneratedSite,
   StreamEvent,
+  CompetitorReport,
+  BriefAnalysis,
 } from '@genesis/shared';
 import { runTranslator } from './agents/TranslatorAgent';
 import { runAnalyzer } from './agents/AnalyzerAgent';
 import { runCompetitor } from './agents/CompetitorAgent';
+import { runContent } from './agents/ContentAgent';
+import { runSEO } from './agents/SEOAgent';
 import { runDesign, generateSeed } from './agents/DesignAgent';
 import { runCoder } from './agents/CoderAgent';
 import { getTemplate, applyTemplateToBrief, templateToPlan } from './templates';
 import { runReviewer } from './agents/ReviewerAgent';
 import { runDeployer } from './agents/DeployerAgent';
+import { validateProject } from './validate';
 
 function id(): string {
   return 'gen_' + generateSeed().slice(0, 12);
@@ -45,15 +50,41 @@ export async function* runPipeline(
     { brief, template: template.label },
   );
 
-  // ── Step 3: Competitors ────────────────────────────────────────────
+  // ── Step 3: Competitors (non-fatal: degrade to a neutral positioning) ─
   yield ev('competitors', 'start', 'Analyse de 20 concurrents…', 34);
-  const competitor = await runCompetitor(brief);
+  let competitor: CompetitorReport;
+  try {
+    competitor = await runCompetitor(brief);
+    yield ev(
+      'competitors',
+      'done',
+      `Positionnement gagnant identifié (${competitor.topWeaknesses.length} faiblesses exploitées)`,
+      40,
+      competitor,
+    );
+  } catch (err) {
+    competitor = fallbackCompetitor(brief);
+    yield ev('competitors', 'error', `Analyse concurrentielle indisponible (${msg(err)}) — positionnement par défaut`, 40);
+  }
+
+  // ── Step 3.5: Content + SEO (parallel; non-fatal — Coder has fallbacks) ─
+  yield ev('content', 'start', 'Rédaction de la copy et du SEO localisés…', 44);
+  const [content, seo] = await Promise.all([
+    runContent(brief, translation).catch(() => undefined),
+    runSEO(brief, translation).catch(() => undefined),
+  ]);
   yield ev(
-    'competitors',
-    'done',
-    `Positionnement gagnant identifié (${competitor.topWeaknesses.length} faiblesses exploitées)`,
-    46,
-    competitor,
+    'content',
+    content || seo ? 'done' : 'error',
+    content && seo
+      ? 'Copy persuasive + SEO générés'
+      : content
+        ? 'Copy générée (SEO par défaut)'
+        : seo
+          ? 'SEO généré (copy par défaut)'
+          : 'Copy/SEO indisponibles — valeurs par défaut',
+    48,
+    { hasContent: Boolean(content), hasSeo: Boolean(seo) },
   );
 
   // ── Step 4: Design (deterministic, unique — seed derived from siteId) ─
@@ -80,6 +111,8 @@ export async function* runPipeline(
       name: translation.languageName,
       rtl: translation.isRtl,
     },
+    content,
+    seo,
   });
 
   let cstep = await coder.next();
@@ -97,16 +130,31 @@ export async function* runPipeline(
   }
   const coderResult = cstep.value;
   const files: GeneratedFile[] = coderResult.generatedFiles;
-  yield ev('code', 'done', `${coderResult.files.length} fichiers générés`, 84, {
-    files: coderResult.files,
-    path: coderResult.path,
-  });
+
+  // Validate the project before declaring it done (catches truncated files,
+  // leaked markdown fences, missing entrypoints) and surface any warnings.
+  const validation = validateProject(files);
+  yield ev(
+    'code',
+    validation.ok ? 'done' : 'error',
+    validation.ok
+      ? `${coderResult.files.length} fichiers générés et validés`
+      : `${coderResult.files.length} fichiers générés — ${validation.errors.length} problème(s) détecté(s)`,
+    84,
+    { files: coderResult.files, path: coderResult.path, validation },
+  );
 
   // ── Step 6: Review (sample the key UI files to keep it fast) ───────
   yield ev('review', 'start', 'Contrôle qualité & accessibilité…', 88);
-  const reviewSample = files.filter((f) => f.path.endsWith('.tsx')).slice(0, 6);
-  const review = await runReviewer(reviewSample.length ? reviewSample : files);
-  yield ev('review', 'done', `Score qualité : ${review.score}/100`, 92, review);
+  let review: Awaited<ReturnType<typeof runReviewer>>;
+  try {
+    const reviewSample = files.filter((f) => f.path.endsWith('.tsx')).slice(0, 6);
+    review = await runReviewer(reviewSample.length ? reviewSample : files);
+    yield ev('review', 'done', `Score qualité : ${review.score}/100`, 92, review);
+  } catch (err) {
+    review = { score: 0, issues: [], passed: false } as typeof review;
+    yield ev('review', 'error', `Revue indisponible (${msg(err)}) — étape ignorée`, 92);
+  }
 
   // ── Step 7: Deploy ─────────────────────────────────────────────────
   yield ev('deploy', 'start', 'Déploiement…', 95);
@@ -135,4 +183,18 @@ function ev(
   data?: unknown,
 ): StreamEvent {
   return { stage, status, message, progress, data };
+}
+
+function msg(err: unknown): string {
+  return (err as Error)?.message ?? String(err);
+}
+
+/** Neutral competitor report so the pipeline survives a CompetitorAgent failure. */
+function fallbackCompetitor(brief: BriefAnalysis): CompetitorReport {
+  return {
+    competitors: [],
+    topWeaknesses: [],
+    positioning: `un positionnement premium et clair pour ${brief.sector}`,
+    recommendedDifferentiators: brief.features.slice(0, 3),
+  };
 }

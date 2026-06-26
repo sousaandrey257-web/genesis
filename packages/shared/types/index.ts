@@ -110,6 +110,7 @@ export type PipelineStage =
   | 'translate'
   | 'analyze'
   | 'competitors'
+  | 'content'
   | 'design'
   | 'architect'
   | 'code'

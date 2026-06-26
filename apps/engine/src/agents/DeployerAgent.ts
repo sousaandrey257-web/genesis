@@ -5,6 +5,8 @@ export interface DeployResult {
   deployed: boolean;
   url?: string;
   message: string;
+  state?: string;
+  customDomain?: { name: string; attached: boolean };
 }
 
 /**
@@ -27,12 +29,28 @@ export async function runDeployer(
   }
 
   try {
-    const url = await deployToVercel({ projectId, files, customDomain });
-    return { deployed: true, url, message: `Deployed to ${url}` };
+    const r = await deployToVercel({ projectId, files, customDomain });
+    const domainNote =
+      r.customDomain && !r.customDomain.attached
+        ? ` (domaine ${r.customDomain.name} non rattaché — vérifie le DNS)`
+        : '';
+    const message =
+      r.state === 'READY'
+        ? `Déployé sur ${r.url}${domainNote}`
+        : r.state === 'BUILDING'
+          ? `Build lancé (${r.url}) — toujours en cours${domainNote}`
+          : `Déploiement ${r.state} : ${r.url}${domainNote}`;
+    return {
+      deployed: r.state === 'READY' || r.state === 'BUILDING',
+      url: r.url,
+      state: r.state,
+      customDomain: r.customDomain,
+      message,
+    };
   } catch (err) {
     return {
       deployed: false,
-      message: `Deploy failed: ${(err as Error).message}`,
+      message: `Échec du déploiement : ${(err as Error).message}`,
     };
   }
 }
