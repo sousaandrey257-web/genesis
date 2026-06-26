@@ -13,6 +13,10 @@ import { runContent } from './agents/ContentAgent';
 import { runSEO } from './agents/SEOAgent';
 import { runDesign, generateSeed } from './agents/DesignAgent';
 import { runCoder } from './agents/CoderAgent';
+import { runMobile } from './agents/MobileAgent';
+import { runVideo } from './agents/VideoAgent';
+import { runMarketing } from './agents/MarketingAgent';
+import { runGrowth } from './agents/GrowthAgent';
 import { getTemplate, applyTemplateToBrief, templateToPlan } from './templates';
 import { runReviewer } from './agents/ReviewerAgent';
 import { runDeployer } from './agents/DeployerAgent';
@@ -140,26 +144,69 @@ export async function* runPipeline(
     validation.ok
       ? `${coderResult.files.length} fichiers générés et validés`
       : `${coderResult.files.length} fichiers générés — ${validation.errors.length} problème(s) détecté(s)`,
-    84,
+    82,
     { files: coderResult.files, path: coderResult.path, validation },
   );
 
-  // ── Step 6: Review (sample the key UI files to keep it fast) ───────
-  yield ev('review', 'start', 'Contrôle qualité & accessibilité…', 88);
+  const lang = {
+    code: translation.detectedLanguage,
+    name: translation.languageName,
+    rtl: translation.isRtl,
+  };
+
+  // ── Steps 6–8: Mobile app, promo videos, marketing kit (parallel; non-fatal) ─
+  yield ev('mobile', 'start', 'Génération de l’app mobile (Expo)…', 83, undefined, 6, 'MobileAgent');
+  yield ev('video', 'start', 'Génération des vidéos de présentation…', 84, undefined, 7, 'VideoAgent');
+  yield ev('marketing', 'start', 'Génération du kit marketing (social, ads, emails)…', 85, undefined, 8, 'MarketingAgent');
+
+  const [mobileR, videoR, marketingR] = await Promise.allSettled([
+    runMobile({ siteId: projectId, analysis: brief, design, competitors: competitor, language: lang }),
+    runVideo({ siteId: projectId, analysis: brief, design, competitors: competitor, language: lang }),
+    runMarketing({ siteId: projectId, analysis: brief, design, competitors: competitor, language: lang }),
+  ]);
+
+  const mobile = mobileR.status === 'fulfilled' ? mobileR.value : undefined;
+  yield mobile
+    ? ev('mobile', 'done', `App mobile générée (${mobile.files.length} fichiers, EAS-ready)`, 86, mobile, 6, 'MobileAgent')
+    : ev('mobile', 'error', `App mobile indisponible (${msg((mobileR as PromiseRejectedResult).reason)})`, 86, undefined, 6, 'MobileAgent');
+
+  const video = videoR.status === 'fulfilled' ? videoR.value : undefined;
+  yield video
+    ? ev('video', 'done', video.note, 87, video, 7, 'VideoAgent')
+    : ev('video', 'error', `Vidéos indisponibles (${msg((videoR as PromiseRejectedResult).reason)})`, 87, undefined, 7, 'VideoAgent');
+
+  const marketing = marketingR.status === 'fulfilled' ? marketingR.value : undefined;
+  yield marketing
+    ? ev('marketing', 'done', `Kit marketing généré (${marketing.files.length} fichiers)`, 88, marketing, 8, 'MarketingAgent')
+    : ev('marketing', 'error', `Kit marketing indisponible (${msg((marketingR as PromiseRejectedResult).reason)})`, 88, undefined, 8, 'MarketingAgent');
+
+  // ── Step 9: Review (sample the key UI files to keep it fast) ───────
+  yield ev('review', 'start', 'Contrôle qualité & accessibilité…', 89, undefined, 9, 'ReviewerAgent');
   let review: Awaited<ReturnType<typeof runReviewer>>;
   try {
     const reviewSample = files.filter((f) => f.path.endsWith('.tsx')).slice(0, 6);
     review = await runReviewer(reviewSample.length ? reviewSample : files);
-    yield ev('review', 'done', `Score qualité : ${review.score}/100`, 92, review);
+    yield ev('review', 'done', `Score qualité : ${review.score}/100`, 91, review, 9, 'ReviewerAgent');
   } catch (err) {
     review = { score: 0, issues: [], passed: false } as typeof review;
-    yield ev('review', 'error', `Revue indisponible (${msg(err)}) — étape ignorée`, 92);
+    yield ev('review', 'error', `Revue indisponible (${msg(err)}) — étape ignorée`, 91, undefined, 9, 'ReviewerAgent');
   }
 
-  // ── Step 7: Deploy ─────────────────────────────────────────────────
-  yield ev('deploy', 'start', 'Déploiement…', 95);
+  // ── Step 11: Growth — inject analytics + A/B test into the site (non-fatal) ─
+  yield ev('growth', 'start', 'Intégration analytics & A/B testing…', 93, undefined, 11, 'GrowthAgent');
+  let growth: ReturnType<typeof runGrowth> | undefined;
+  try {
+    growth = runGrowth({ analysis: brief, design });
+    files.push(...growth.files); // analytics ships with the site
+    yield ev('growth', 'done', `Analytics + A/B test prêts (${growth.files.length} fichiers injectés)`, 94, growth, 11, 'GrowthAgent');
+  } catch (err) {
+    yield ev('growth', 'error', `Growth indisponible (${msg(err)})`, 94, undefined, 11, 'GrowthAgent');
+  }
+
+  // ── Step 12: Deploy ────────────────────────────────────────────────
+  yield ev('deploy', 'start', 'Déploiement…', 95, undefined, 12, 'DeployerAgent');
   const deploy = await runDeployer(projectId, files, req.customDomain);
-  yield ev('deploy', 'done', deploy.message, 100, deploy);
+  yield ev('deploy', 'done', deploy.message, 100, deploy, 12, 'DeployerAgent');
 
   return {
     id: projectId,
@@ -169,9 +216,21 @@ export async function* runPipeline(
     design,
     competitor,
     files,
-    fileNames: coderResult.files,
+    fileNames: files.map((f) => f.path),
     ready: coderResult.ready,
     deployUrl: deploy.url,
+    mobile: mobile
+      ? { path: mobile.path, fileNames: mobile.files, ready: mobile.ready }
+      : undefined,
+    video: video
+      ? { path: video.path, outputs: video.outputs, rendered: video.rendered, note: video.note }
+      : undefined,
+    marketing: marketing
+      ? { path: marketing.path, counts: marketing.counts, calendar: marketing.calendar }
+      : undefined,
+    growth: growth
+      ? { abTestId: growth.abTest.id, recommendations: growth.recommendations }
+      : undefined,
   };
 }
 
@@ -181,8 +240,10 @@ function ev(
   message: string,
   progress: number,
   data?: unknown,
+  step?: number,
+  agent?: string,
 ): StreamEvent {
-  return { stage, status, message, progress, data };
+  return { stage, status, message, progress, data, step, agent };
 }
 
 function msg(err: unknown): string {

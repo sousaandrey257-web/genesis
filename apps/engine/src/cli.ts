@@ -10,6 +10,27 @@
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+
+// Load .env if present (Node 20.6+). The web app loads it via Next.js; the CLI
+// has to do it itself. `npm run engine` runs from apps/engine, so also look up
+// at the monorepo root. First existing file wins; silent if none.
+{
+  const load = (process as NodeJS.Process & { loadEnvFile?: (p?: string) => void })
+    .loadEnvFile;
+  const candidates = [
+    join(process.cwd(), '.env'),
+    join(process.cwd(), '..', '..', '.env'),
+  ];
+  for (const p of candidates) {
+    try {
+      load?.(p);
+      break;
+    } catch {
+      /* try next candidate */
+    }
+  }
+}
+
 import type { GeneratedSite, StreamEvent } from '@genesis/shared';
 import { runPipeline } from './Orchestrator';
 import { runTranslator } from './agents/TranslatorAgent';

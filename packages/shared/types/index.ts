@@ -103,6 +103,25 @@ export interface GeneratedSite {
   /** Optional static preview (only for the legacy static framework). */
   previewHtml?: string;
   deployUrl?: string;
+
+  // ── Multi-output extensions (each optional; absent if the module was skipped) ──
+  /** React Native (Expo) app bundle. */
+  mobile?: { path: string; fileNames: string[]; ready: boolean };
+  /** Promo videos (3 aspect ratios) — `rendered` is false until `eas`/remotion runs. */
+  video?: {
+    path: string;
+    outputs: { landscape: string; portrait: string; square: string };
+    rendered: boolean;
+    note: string;
+  };
+  /** Marketing kit (social, ads, emails). */
+  marketing?: {
+    path: string;
+    counts: Record<string, number>;
+    calendar: Array<{ day: number; channel: string; title: string }>;
+  };
+  /** Analytics + A/B setup injected into the site. */
+  growth?: { abTestId: string; recommendations: string[] };
 }
 
 /** Streamed pipeline events (SSE) from /api/generate. */
@@ -114,7 +133,11 @@ export type PipelineStage =
   | 'design'
   | 'architect'
   | 'code'
+  | 'mobile'
+  | 'video'
+  | 'marketing'
   | 'review'
+  | 'growth'
   | 'deploy';
 
 export interface StreamEvent {
@@ -124,6 +147,10 @@ export interface StreamEvent {
   data?: unknown;
   /** 0–100 overall progress. */
   progress?: number;
+  /** Sequential step number in the pipeline (0-based), for richer UIs. */
+  step?: number;
+  /** Human label of the agent producing this event, e.g. "MobileAgent". */
+  agent?: string;
 }
 
 export interface GenerateRequest {

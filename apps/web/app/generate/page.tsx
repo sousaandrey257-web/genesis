@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StreamEvent } from '@genesis/shared';
 import { ArrowRight, Loader2 } from 'lucide-react';
 
@@ -23,8 +23,21 @@ export default function GeneratePage() {
 
   const progress = events.at(-1)?.progress ?? 0;
 
-  async function generate() {
-    if (idea.trim().length < 3 || running) return;
+  // A brief synthesized by the ConversationUI (/start) is handed over via
+  // sessionStorage; prefill it and auto-launch the generation.
+  useEffect(() => {
+    const handover = sessionStorage.getItem('genesis_idea');
+    if (handover) {
+      sessionStorage.removeItem('genesis_idea');
+      setIdea(handover);
+      void generate(handover);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function generate(ideaOverride?: string) {
+    const value = (ideaOverride ?? idea).trim();
+    if (value.length < 3 || running) return;
     setRunning(true);
     setEvents([]);
     setSite(null);
@@ -33,7 +46,7 @@ export default function GeneratePage() {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idea }),
+      body: JSON.stringify({ idea: value }),
     });
 
     if (!res.body) {
@@ -96,7 +109,7 @@ export default function GeneratePage() {
             className="flex-1 rounded-full glass px-6 py-4 text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-violet-glow/50"
           />
           <button
-            onClick={generate}
+            onClick={() => generate()}
             disabled={running || idea.trim().length < 3}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-genesis-gradient px-7 py-4 font-semibold text-white transition hover:scale-[1.03] disabled:opacity-50"
           >

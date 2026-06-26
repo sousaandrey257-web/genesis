@@ -1,5 +1,6 @@
 import Hero from '@/components/Hero';
 import LiveDemo from '@/components/LiveDemo';
+import OutputShowcase from '@/components/OutputShowcase';
 import Features from '@/components/Features';
 import ROICalculator from '@/components/ROICalculator';
 import PricingCards from '@/components/PricingCards';
@@ -11,6 +12,7 @@ export default function LandingPage() {
     <main className="relative overflow-hidden bg-ink">
       <Hero />
       <LiveDemo />
+      <OutputShowcase />
       <Features />
       <ROICalculator />
       <PricingCards />
